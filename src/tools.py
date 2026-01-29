@@ -17,7 +17,7 @@ from dedalus_mcp import tool
 from dedalus_mcp.types import ToolAnnotations
 
 from db import IMessageDatabase
-from sender import check_messages_app, send_message, send_to_chat
+from sender import check_messages_app, send_attachment, send_attachment_to_chat, send_message, send_to_chat
 
 
 if TYPE_CHECKING:
@@ -288,6 +288,122 @@ async def search_messages(query: str, limit: int = 20) -> MessagesResult:
         return MessagesResult(count=0, messages=[], error=str(e))
 
 
+@tool(
+    description="Get unread messages from all conversations",
+    tags=["imessage", "read", "unread"],
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+async def get_unread_messages(limit: int = 50) -> MessagesResult:
+    """Get unread messages.
+
+    Args:
+        limit: Maximum number of messages (default 50)
+
+    Returns:
+        MessagesResult with unread messages
+
+    """
+    try:
+        db = get_db()
+        messages = db.get_messages(limit=limit, unread_only=True)
+        return MessagesResult(count=len(messages), messages=messages)
+    except Exception as e:
+        return MessagesResult(count=0, messages=[], error=str(e))
+
+
+@dataclass(frozen=True)
+class AttachmentResult:
+    """Result from getting attachments."""
+
+    message_id: int
+    count: int
+    attachments: list[dict]
+    error: str | None = None
+
+
+@tool(
+    description="Get attachments for a specific message by message ID",
+    tags=["imessage", "read", "attachments"],
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+async def get_attachments(message_id: int) -> AttachmentResult:
+    """Get attachments for a message.
+
+    Args:
+        message_id: Message ID (from read_messages)
+
+    Returns:
+        AttachmentResult with attachment info
+
+    """
+    try:
+        db = get_db()
+        attachments = db.get_attachments(message_id)
+        return AttachmentResult(message_id=message_id, count=len(attachments), attachments=attachments)
+    except Exception as e:
+        return AttachmentResult(message_id=message_id, count=0, attachments=[], error=str(e))
+
+
+@tool(
+    description="Send a file attachment via iMessage to a phone number or email",
+    tags=["imessage", "send", "attachment"],
+    annotations=ToolAnnotations(readOnlyHint=False),
+)
+async def send_file(recipient: str, file_path: str, text: str | None = None) -> SendResult:
+    """Send a file attachment.
+
+    Args:
+        recipient: Phone number or email
+        file_path: Absolute path to file
+        text: Optional message text to send with file
+
+    Returns:
+        SendResult with success status
+
+    """
+    status = check_messages_app()
+    if not status["messages_running"]:
+        return SendResult(success=False, recipient=recipient, error="Messages.app is not running")
+
+    result = send_attachment(recipient, file_path, text)
+
+    return SendResult(
+        success=result["success"],
+        recipient=recipient,
+        error=result.get("error"),
+    )
+
+
+@tool(
+    description="Send a file attachment to a group chat",
+    tags=["imessage", "send", "attachment", "group"],
+    annotations=ToolAnnotations(readOnlyHint=False),
+)
+async def send_file_to_group(chat_id: str, file_path: str, text: str | None = None) -> SendResult:
+    """Send a file attachment to a group chat.
+
+    Args:
+        chat_id: Group chat identifier
+        file_path: Absolute path to file
+        text: Optional message text to send with file
+
+    Returns:
+        SendResult with success status
+
+    """
+    status = check_messages_app()
+    if not status["messages_running"]:
+        return SendResult(success=False, chat_id=chat_id, error="Messages.app is not running")
+
+    result = send_attachment_to_chat(chat_id, file_path, text)
+
+    return SendResult(
+        success=result["success"],
+        chat_id=chat_id,
+        error=result.get("error"),
+    )
+
+
 # Export all tools
 imessage_tools = [
     check_status,
@@ -297,4 +413,8 @@ imessage_tools = [
     send_imessage,
     send_to_group,
     search_messages,
+    get_unread_messages,
+    get_attachments,
+    send_file,
+    send_file_to_group,
 ]

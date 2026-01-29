@@ -136,3 +136,109 @@ def check_messages_app() -> dict:
 
     except Exception as e:
         return {"messages_running": False, "error": str(e)}
+
+
+def send_attachment(recipient: str, file_path: str, text: str | None = None) -> dict:
+    """Send a file attachment via iMessage.
+
+    Args:
+        recipient: Phone number or email
+        file_path: Absolute path to file
+        text: Optional message text
+
+    Returns:
+        Dict with success status
+
+    """
+    escaped_recipient = escape_applescript_string(recipient)
+    escaped_path = escape_applescript_string(file_path)
+
+    if text:
+        escaped_text = escape_applescript_string(text)
+        script = f'''
+            tell application "Messages"
+                set targetService to 1st service whose service type = iMessage
+                set targetBuddy to buddy "{escaped_recipient}" of targetService
+                send "{escaped_text}" to targetBuddy
+                send POSIX file "{escaped_path}" to targetBuddy
+            end tell
+        '''
+    else:
+        script = f'''
+            tell application "Messages"
+                set targetService to 1st service whose service type = iMessage
+                set targetBuddy to buddy "{escaped_recipient}" of targetService
+                send POSIX file "{escaped_path}" to targetBuddy
+            end tell
+        '''
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr.strip() or "AppleScript error"}
+
+        return {"success": True, "recipient": recipient, "file": file_path}
+
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def send_attachment_to_chat(chat_id: str, file_path: str, text: str | None = None) -> dict:
+    """Send a file attachment to a group chat.
+
+    Args:
+        chat_id: Chat identifier
+        file_path: Absolute path to file
+        text: Optional message text
+
+    Returns:
+        Dict with success status
+
+    """
+    escaped_chat_id = escape_applescript_string(chat_id)
+    escaped_path = escape_applescript_string(file_path)
+
+    if text:
+        escaped_text = escape_applescript_string(text)
+        script = f'''
+            tell application "Messages"
+                set targetChat to chat id "{escaped_chat_id}"
+                send "{escaped_text}" to targetChat
+                send POSIX file "{escaped_path}" to targetChat
+            end tell
+        '''
+    else:
+        script = f'''
+            tell application "Messages"
+                set targetChat to chat id "{escaped_chat_id}"
+                send POSIX file "{escaped_path}" to targetChat
+            end tell
+        '''
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr.strip() or "AppleScript error"}
+
+        return {"success": True, "chat_id": chat_id, "file": file_path}
+
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

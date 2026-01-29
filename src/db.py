@@ -76,6 +76,7 @@ class IMessageDatabase:
         chat_id: str | None = None,
         since: str | None = None,
         search: str | None = None,
+        unread_only: bool = False,
     ) -> list[dict]:
         """Fetch messages from the database.
 
@@ -84,6 +85,7 @@ class IMessageDatabase:
             chat_id: Filter by specific chat ID
             since: ISO date string to filter messages after
             search: Text search in message content
+            unread_only: Only return unread messages
 
         Returns:
             List of message dictionaries
@@ -102,6 +104,8 @@ class IMessageDatabase:
                 m.is_sent,
                 m.is_delivered,
                 m.cache_has_attachments as has_attachments,
+                m.associated_message_guid,
+                m.associated_message_type,
                 h.id as sender,
                 c.chat_identifier,
                 c.display_name as chat_name,
@@ -119,7 +123,6 @@ class IMessageDatabase:
             params.append(chat_id)
 
         if since:
-            # Convert ISO date to macOS timestamp
             since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
             since_mac = (since_dt.timestamp() - MAC_EPOCH) * 1_000_000_000
             query += " AND m.date > ?"
@@ -129,27 +132,97 @@ class IMessageDatabase:
             query += " AND m.text LIKE ?"
             params.append(f"%{search}%")
 
+        if unread_only:
+            query += " AND m.is_read = 0 AND m.is_from_me = 0"
+
         query += " ORDER BY m.date DESC LIMIT ?"
         params.append(limit)
 
         cursor = conn.execute(query, params)
         rows = cursor.fetchall()
 
+        return [self._row_to_message(row) for row in rows]
+
+    def _row_to_message(self, row: sqlite3.Row) -> dict:
+        """Convert a database row to a message dict with reaction info."""
+        associated_type = row["associated_message_type"] or 0
+
+        # Reaction types: 2000-2005 = add reaction, 3000-3005 = remove reaction
+        is_reaction = associated_type >= 2000
+        reaction_type = None
+        is_reaction_removal = False
+
+        if is_reaction:
+            is_reaction_removal = associated_type >= 3000
+            type_offset = (associated_type % 1000)
+            reaction_map = {0: "love", 1: "like", 2: "dislike", 3: "laugh", 4: "emphasize", 5: "question"}
+            reaction_type = reaction_map.get(type_offset)
+
+        return {
+            "id": row["id"],
+            "guid": row["guid"],
+            "text": row["text"],
+            "timestamp": mac_timestamp_to_iso(row["timestamp"]),
+            "is_from_me": bool(row["is_from_me"]),
+            "is_read": bool(row["is_read"]),
+            "is_sent": bool(row["is_sent"]),
+            "is_delivered": bool(row["is_delivered"]),
+            "has_attachments": bool(row["has_attachments"]),
+            "sender": row["sender"],
+            "chat_identifier": row["chat_identifier"],
+            "chat_name": row["chat_name"],
+            "is_group": bool(row["group_id"]),
+            "is_reaction": is_reaction,
+            "reaction_type": reaction_type,
+            "is_reaction_removal": is_reaction_removal,
+            "associated_message_guid": row["associated_message_guid"],
+        }
+
+    def get_unread_messages(self) -> list[dict]:
+        """Get all unread messages grouped by sender.
+
+        Returns:
+            List of unread messages
+
+        """
+        return self.get_messages(limit=100, unread_only=True)
+
+    def get_attachments(self, message_id: int) -> list[dict]:
+        """Get attachments for a specific message.
+
+        Args:
+            message_id: Message rowid
+
+        Returns:
+            List of attachment dictionaries
+
+        """
+        conn = self._get_connection()
+
+        query = """
+            SELECT
+                a.rowid as id,
+                a.guid,
+                a.filename,
+                a.mime_type,
+                a.transfer_name,
+                a.total_bytes
+            FROM attachment a
+            JOIN message_attachment_join maj ON a.rowid = maj.attachment_id
+            WHERE maj.message_id = ?
+        """
+
+        cursor = conn.execute(query, [message_id])
+        rows = cursor.fetchall()
+
         return [
             {
                 "id": row["id"],
                 "guid": row["guid"],
-                "text": row["text"],
-                "timestamp": mac_timestamp_to_iso(row["timestamp"]),
-                "is_from_me": bool(row["is_from_me"]),
-                "is_read": bool(row["is_read"]),
-                "is_sent": bool(row["is_sent"]),
-                "is_delivered": bool(row["is_delivered"]),
-                "has_attachments": bool(row["has_attachments"]),
-                "sender": row["sender"],
-                "chat_identifier": row["chat_identifier"],
-                "chat_name": row["chat_name"],
-                "is_group": bool(row["group_id"]),
+                "filename": row["filename"],
+                "mime_type": row["mime_type"],
+                "transfer_name": row["transfer_name"],
+                "size_bytes": row["total_bytes"],
             }
             for row in rows
         ]
