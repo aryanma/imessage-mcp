@@ -1,0 +1,105 @@
+# --- BUILD SYSTEM ---
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+# --- PROJECT CONFIGURATION ---
+
+[project]
+name = "imessage-mcp"
+version = "0.1.0"
+description = "iMessage MCP server for macOS - read and send messages via AI agents."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Aryan Mahajan" },
+]
+keywords = ["ai", "mcp", "agents", "dedalus", "imessage", "macos"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "dedalus-mcp>=0.6.0",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+    "uvloop>=0.22.1; platform_system != 'Windows'",
+]
+
+# --- DEPENDENCY GROUPS ---
+
+[dependency-groups]
+runtime = [
+    "pydantic>=2.12.5",
+    "uvloop>=0.22.1; platform_system != 'Windows'",
+]
+
+test = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+]
+
+dev = [
+    { include-group = "runtime" },
+    { include-group = "test" },
+]
+
+# --- UV CONFIGURATION ---
+
+[tool.uv]
+preview = true
+package = false
+default-groups = ["runtime"]
+cache-dir = ".cache/uv"
+
+compile-bytecode = true
+link-mode = "hardlink"
+
+environments = ["sys_platform == 'darwin'"]  # macOS only
+
+concurrent-downloads = 50
+concurrent-builds = 4
+concurrent-installs = 4
+
+resolution = "highest"
+prerelease = "if-necessary"
+
+python-preference = "managed"
+python-downloads = "automatic"
+
+# --- RUFF CONFIGURATION ---
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "D", "ANN"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "ANN101", "ANN102"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# --- PYTEST CONFIGURATION ---
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
