@@ -42,10 +42,9 @@ Server runs at `http://127.0.0.1:8080/mcp`
 | Tool | Description |
 |------|-------------|
 | `check_status` | Check if iMessage is ready |
-| `read_messages` | Read messages with filters |
+| `read_messages` | Read messages (filters: chat_id, search, since, chronological) |
 | `list_chats` | List conversations |
 | `get_chat_participants` | Get chat members |
-| `search_messages` | Search messages |
 | `get_unread_messages` | Get unread messages |
 | `get_attachments` | Get attachments for a message |
 | `send_imessage` | Send text to phone/email |

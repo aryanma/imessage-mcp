@@ -77,6 +77,7 @@ class IMessageDatabase:
         since: str | None = None,
         search: str | None = None,
         unread_only: bool = False,
+        chronological: bool = False,
     ) -> list[dict]:
         """Fetch messages from the database.
 
@@ -86,6 +87,7 @@ class IMessageDatabase:
             since: ISO date string to filter messages after
             search: Text search in message content
             unread_only: Only return unread messages
+            chronological: If True, oldest first; if False, newest first
 
         Returns:
             List of message dictionaries
@@ -135,13 +137,15 @@ class IMessageDatabase:
         if unread_only:
             query += " AND m.is_read = 0 AND m.is_from_me = 0"
 
+        # Always fetch in DESC order, then reverse if chronological
         query += " ORDER BY m.date DESC LIMIT ?"
         params.append(limit)
 
         cursor = conn.execute(query, params)
         rows = cursor.fetchall()
 
-        return [self._row_to_message(row) for row in rows]
+        messages = [self._row_to_message(row) for row in rows]
+        return list(reversed(messages)) if chronological else messages
 
     def _row_to_message(self, row: sqlite3.Row) -> dict:
         """Convert a database row to a message dict with reaction info."""

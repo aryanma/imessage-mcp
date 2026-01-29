@@ -125,7 +125,7 @@ async def check_status() -> StatusResult:
 
 
 @tool(
-    description="Read recent iMessage/SMS messages with optional filters for chat, date, or search",
+    description="Read iMessage/SMS messages with optional filters. Use chronological=true for conversation threads.",
     tags=["imessage", "read", "messages"],
     annotations=ToolAnnotations(readOnlyHint=True),
 )
@@ -134,6 +134,7 @@ async def read_messages(
     chat_id: str | None = None,
     since: str | None = None,
     search: str | None = None,
+    chronological: bool = False,
 ) -> MessagesResult:
     """Read messages from iMessage database.
 
@@ -142,6 +143,7 @@ async def read_messages(
         chat_id: Filter by specific chat identifier (phone/email or group chat ID)
         since: ISO date string to filter messages after (e.g., "2024-01-15T00:00:00")
         search: Text to search for in message content
+        chronological: If true, oldest first (for reading threads); if false, newest first
 
     Returns:
         MessagesResult with messages array and count
@@ -154,6 +156,7 @@ async def read_messages(
             chat_id=chat_id,
             since=since,
             search=search,
+            chronological=chronological,
         )
         return MessagesResult(count=len(messages), messages=messages)
     except Exception as e:
@@ -270,30 +273,6 @@ async def send_to_group(chat_id: str, text: str) -> SendResult:
         chat_id=chat_id,
         error=result.get("error"),
     )
-
-
-@tool(
-    description="Search messages by text content across all conversations",
-    tags=["imessage", "read", "search"],
-    annotations=ToolAnnotations(readOnlyHint=True),
-)
-async def search_messages(query: str, limit: int = 20) -> MessagesResult:
-    """Search messages by content.
-
-    Args:
-        query: Text to search for
-        limit: Maximum results (default 20)
-
-    Returns:
-        MessagesResult with matching messages
-
-    """
-    try:
-        db = get_db()
-        messages = db.get_messages(limit=limit, search=query)
-        return MessagesResult(count=len(messages), messages=messages)
-    except Exception as e:
-        return MessagesResult(count=0, messages=[], error=str(e))
 
 
 @tool(
@@ -545,11 +524,10 @@ imessage_tools = [
     read_messages,
     list_chats,
     get_chat_participants,
-    send_imessage,
-    send_to_group,
-    search_messages,
     get_unread_messages,
     get_attachments,
+    send_imessage,
+    send_to_group,
     send_file,
     send_file_to_group,
     lookup_contact,
