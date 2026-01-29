@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 # --- Database instance ---
 
 _db: IMessageDatabase | None = None
+_watcher_cursor: int | None = None  # Tracks last seen message ID for watching
 
 
 def get_db() -> IMessageDatabase:
@@ -412,6 +413,101 @@ async def send_file_to_group(chat_id: str, file_path: str, text: str | None = No
 
 
 @dataclass(frozen=True)
+class WatcherResult:
+    """Result from watcher operations."""
+
+    watching: bool
+    cursor: int | None
+    message: str | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class NewMessagesResult:
+    """Result from checking new messages."""
+
+    count: int
+    messages: list[dict]
+    cursor: int | None
+    error: str | None = None
+
+
+@tool(
+    description="Start watching for new messages. Call check_new_messages periodically to get updates.",
+    tags=["imessage", "watch"],
+    annotations=ToolAnnotations(readOnlyHint=False),
+)
+async def start_watching() -> WatcherResult:
+    """Start watching for new messages.
+
+    Sets a cursor at the current latest message. Subsequent calls to
+    check_new_messages will return messages received after this point.
+
+    Returns:
+        WatcherResult with watching status
+
+    """
+    global _watcher_cursor
+    try:
+        db = get_db()
+        _watcher_cursor = db.get_latest_message_id()
+        return WatcherResult(watching=True, cursor=_watcher_cursor, message="Watching started")
+    except Exception as e:
+        return WatcherResult(watching=False, cursor=None, error=str(e))
+
+
+@tool(
+    description="Check for new messages since watching started. Returns new messages and updates cursor.",
+    tags=["imessage", "watch", "read"],
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+async def check_new_messages() -> NewMessagesResult:
+    """Check for new messages since last check.
+
+    Returns messages received since start_watching was called (or since
+    the last check_new_messages call). Updates the cursor automatically.
+
+    Returns:
+        NewMessagesResult with new messages
+
+    """
+    global _watcher_cursor
+    if _watcher_cursor is None:
+        return NewMessagesResult(count=0, messages=[], cursor=None, error="Not watching. Call start_watching first.")
+
+    try:
+        db = get_db()
+        messages = db.get_messages_since_id(_watcher_cursor)
+
+        # Update cursor to latest message
+        if messages:
+            _watcher_cursor = max(m["id"] for m in messages)
+
+        return NewMessagesResult(count=len(messages), messages=messages, cursor=_watcher_cursor)
+    except Exception as e:
+        return NewMessagesResult(count=0, messages=[], cursor=_watcher_cursor, error=str(e))
+
+
+@tool(
+    description="Stop watching for new messages",
+    tags=["imessage", "watch"],
+    annotations=ToolAnnotations(readOnlyHint=False),
+)
+async def stop_watching() -> WatcherResult:
+    """Stop watching for new messages.
+
+    Clears the cursor. Call start_watching to begin again.
+
+    Returns:
+        WatcherResult confirming stopped
+
+    """
+    global _watcher_cursor
+    _watcher_cursor = None
+    return WatcherResult(watching=False, cursor=None, message="Watching stopped")
+
+
+@dataclass(frozen=True)
 class ContactsResult:
     """Result from contact lookup."""
 
@@ -457,4 +553,7 @@ imessage_tools = [
     send_file,
     send_file_to_group,
     lookup_contact,
+    start_watching,
+    check_new_messages,
+    stop_watching,
 ]

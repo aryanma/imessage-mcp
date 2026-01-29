@@ -302,3 +302,59 @@ class IMessageDatabase:
         rows = cursor.fetchall()
 
         return [{"handle": row["id"], "service": row["service"]} for row in rows]
+
+    def get_latest_message_id(self) -> int:
+        """Get the ID of the most recent message.
+
+        Returns:
+            Latest message rowid, or 0 if no messages
+
+        """
+        conn = self._get_connection()
+        cursor = conn.execute("SELECT MAX(rowid) FROM message")
+        row = cursor.fetchone()
+        return row[0] or 0
+
+    def get_messages_since_id(self, since_id: int, limit: int = 50) -> list[dict]:
+        """Get messages newer than a specific message ID.
+
+        Args:
+            since_id: Message ID to start from (exclusive)
+            limit: Maximum messages to return
+
+        Returns:
+            List of new messages (oldest first)
+
+        """
+        conn = self._get_connection()
+
+        query = """
+            SELECT
+                m.rowid as id,
+                m.guid,
+                m.text,
+                m.date as timestamp,
+                m.is_from_me,
+                m.is_read,
+                m.is_sent,
+                m.is_delivered,
+                m.cache_has_attachments as has_attachments,
+                m.associated_message_guid,
+                m.associated_message_type,
+                h.id as sender,
+                c.chat_identifier,
+                c.display_name as chat_name,
+                c.group_id
+            FROM message m
+            LEFT JOIN handle h ON m.handle_id = h.rowid
+            LEFT JOIN chat_message_join cmj ON m.rowid = cmj.message_id
+            LEFT JOIN chat c ON cmj.chat_id = c.rowid
+            WHERE m.rowid > ?
+            ORDER BY m.rowid ASC
+            LIMIT ?
+        """
+
+        cursor = conn.execute(query, [since_id, limit])
+        rows = cursor.fetchall()
+
+        return [self._row_to_message(row) for row in rows]
