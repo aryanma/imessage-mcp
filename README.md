@@ -47,6 +47,7 @@ Server runs at `http://127.0.0.1:8080/mcp`
 | `get_chat_participants` | Get chat members |
 | `get_unread_messages` | Get unread messages |
 | `get_attachments` | Get attachments for a message |
+| `download_attachment` | Copy attachment to local path |
 | `send_imessage` | Send text to phone/email |
 | `send_to_group` | Send text to group chat |
 | `send_file` | Send file to phone/email |

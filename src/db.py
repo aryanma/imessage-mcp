@@ -10,6 +10,7 @@ Requires Full Disk Access permission on macOS.
 from __future__ import annotations
 
 import os
+import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,63 @@ MAC_EPOCH = datetime(2001, 1, 1).timestamp()
 def get_db_path() -> str:
     """Get the default iMessage database path."""
     return os.path.expanduser("~/Library/Messages/chat.db")
+
+
+def download_attachment(source_path: str, dest_path: str, convert_to_jpeg: bool = True) -> dict:
+    """Copy an attachment file to a destination path, converting images if needed.
+
+    Args:
+        source_path: Path from get_attachments (may start with ~)
+        dest_path: Where to copy the file
+        convert_to_jpeg: Convert HEIC/HEIF images to JPEG for compatibility
+
+    Returns:
+        Dict with success status, dest_path, and size
+
+    """
+    import subprocess
+
+    try:
+        src = os.path.expanduser(source_path)
+
+        if not os.path.exists(src):
+            return {"success": False, "error": f"Source file not found: {src}"}
+
+        dst = os.path.expanduser(dest_path)
+        os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
+
+        # Check if we need to convert HEIC/HEIF to JPEG
+        src_lower = src.lower()
+        is_heic = src_lower.endswith((".heic", ".heif"))
+
+        if is_heic and convert_to_jpeg:
+            # Change destination extension to .jpg
+            dst_base = os.path.splitext(dst)[0]
+            dst = dst_base + ".jpg"
+
+            # Use macOS sips to convert HEIC to JPEG
+            result = subprocess.run(
+                ["sips", "-s", "format", "jpeg", src, "--out", dst],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode != 0:
+                return {"success": False, "error": f"Conversion failed: {result.stderr}"}
+        else:
+            shutil.copy2(src, dst)
+
+        return {
+            "success": True,
+            "source": src,
+            "dest": dst,
+            "size_bytes": os.path.getsize(dst),
+            "converted": is_heic and convert_to_jpeg,
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 def mac_timestamp_to_iso(ns_timestamp: int | None) -> str | None:

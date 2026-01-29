@@ -16,7 +16,7 @@ from pydantic.dataclasses import dataclass
 from dedalus_mcp import tool
 from dedalus_mcp.types import ToolAnnotations
 
-from db import IMessageDatabase
+from db import IMessageDatabase, download_attachment as db_download_attachment
 from sender import (
     check_messages_app,
     search_contacts,
@@ -331,6 +331,51 @@ async def get_attachments(message_id: int) -> AttachmentResult:
         return AttachmentResult(message_id=message_id, count=0, attachments=[], error=str(e))
 
 
+@dataclass(frozen=True)
+class DownloadResult:
+    """Result from downloading an attachment."""
+
+    success: bool
+    source: str | None = None
+    dest: str | None = None
+    size_bytes: int | None = None
+    converted: bool = False
+    error: str | None = None
+
+
+@tool(
+    description="Download an attachment to a local path. HEIC images are auto-converted to JPEG.",
+    tags=["imessage", "read", "attachments"],
+    annotations=ToolAnnotations(readOnlyHint=False),
+)
+async def download_attachment(source_path: str, dest_path: str) -> DownloadResult:
+    """Download an attachment to a local path.
+
+    HEIC/HEIF images are automatically converted to JPEG for compatibility.
+
+    Args:
+        source_path: Attachment path from get_attachments (filename field)
+        dest_path: Where to save the file (extension auto-changed to .jpg for HEIC)
+
+    Returns:
+        DownloadResult with success status and file info
+
+    """
+    try:
+        result = db_download_attachment(source_path, dest_path)
+        if result["success"]:
+            return DownloadResult(
+                success=True,
+                source=result["source"],
+                dest=result["dest"],
+                size_bytes=result["size_bytes"],
+                converted=result.get("converted", False),
+            )
+        return DownloadResult(success=False, error=result.get("error"))
+    except Exception as e:
+        return DownloadResult(success=False, error=str(e))
+
+
 @tool(
     description="Send a file attachment via iMessage to a phone number or email",
     tags=["imessage", "send", "attachment"],
@@ -526,6 +571,7 @@ imessage_tools = [
     get_chat_participants,
     get_unread_messages,
     get_attachments,
+    download_attachment,
     send_imessage,
     send_to_group,
     send_file,
