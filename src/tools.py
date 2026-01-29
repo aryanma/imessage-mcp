@@ -17,7 +17,14 @@ from dedalus_mcp import tool
 from dedalus_mcp.types import ToolAnnotations
 
 from db import IMessageDatabase
-from sender import check_messages_app, send_attachment, send_attachment_to_chat, send_message, send_to_chat
+from sender import (
+    check_messages_app,
+    search_contacts,
+    send_attachment,
+    send_attachment_to_chat,
+    send_message,
+    send_to_chat,
+)
 
 
 if TYPE_CHECKING:
@@ -404,6 +411,38 @@ async def send_file_to_group(chat_id: str, file_path: str, text: str | None = No
     )
 
 
+@dataclass(frozen=True)
+class ContactsResult:
+    """Result from contact lookup."""
+
+    query: str
+    count: int
+    contacts: list[dict]
+    error: str | None = None
+
+
+@tool(
+    description="Search macOS Contacts by name to find phone numbers and emails",
+    tags=["contacts", "lookup"],
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+async def lookup_contact(name: str) -> ContactsResult:
+    """Look up a contact by name.
+
+    Args:
+        name: Name to search for (first, last, or full name)
+
+    Returns:
+        ContactsResult with matching contacts and their phone/email
+
+    """
+    try:
+        contacts = search_contacts(name)
+        return ContactsResult(query=name, count=len(contacts), contacts=contacts)
+    except Exception as e:
+        return ContactsResult(query=name, count=0, contacts=[], error=str(e))
+
+
 # Export all tools
 imessage_tools = [
     check_status,
@@ -417,4 +456,5 @@ imessage_tools = [
     get_attachments,
     send_file,
     send_file_to_group,
+    lookup_contact,
 ]

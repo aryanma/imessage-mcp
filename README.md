@@ -52,6 +52,7 @@ Server runs at `http://127.0.0.1:8080/mcp`
 | `send_to_group` | Send text to group chat |
 | `send_file` | Send file to phone/email |
 | `send_file_to_group` | Send file to group chat |
+| `lookup_contact` | Search Contacts.app by name |
 
 ## MCP Config
 

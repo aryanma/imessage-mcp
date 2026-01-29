@@ -192,6 +192,68 @@ def send_attachment(recipient: str, file_path: str, text: str | None = None) -> 
         return {"success": False, "error": str(e)}
 
 
+def search_contacts(query: str) -> list[dict]:
+    """Search macOS Contacts by name.
+
+    Args:
+        query: Name to search for
+
+    Returns:
+        List of matching contacts with phones/emails
+
+    """
+    escaped_query = escape_applescript_string(query)
+
+    script = f'''
+        set output to ""
+        tell application "Contacts"
+            set matchedPeople to (every person whose name contains "{escaped_query}")
+            repeat with p in matchedPeople
+                set n to name of p
+                set ph to ""
+                set em to ""
+                repeat with x in phones of p
+                    set ph to ph & (value of x) & "|"
+                end repeat
+                repeat with x in emails of p
+                    set em to em & (value of x) & "|"
+                end repeat
+                set output to output & n & "	" & ph & "	" & em & "\n"
+            end repeat
+        end tell
+        return output
+    '''
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return []
+
+        contacts = []
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                name = parts[0].strip()
+                phones = [p.strip() for p in parts[1].split("|") if p.strip()]
+                emails = [e.strip() for e in parts[2].split("|") if e.strip()]
+                if name:
+                    contacts.append({"name": name, "phones": phones, "emails": emails})
+
+        return contacts
+
+    except Exception:
+        return []
+
+
 def send_attachment_to_chat(chat_id: str, file_path: str, text: str | None = None) -> dict:
     """Send a file attachment to a group chat.
 
