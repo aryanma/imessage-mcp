@@ -237,14 +237,14 @@ def search_contacts(query: str) -> list[dict]:
             return []
 
         contacts = []
-        for line in result.stdout.strip().split("\n"):
+        for line in result.stdout.split("\n"):
             if not line.strip():
                 continue
             parts = line.split("\t")
-            if len(parts) >= 3:
+            if len(parts) >= 2:
                 name = parts[0].strip()
                 phones = [p.strip() for p in parts[1].split("|") if p.strip()]
-                emails = [e.strip() for e in parts[2].split("|") if e.strip()]
+                emails = [e.strip() for e in parts[2].split("|") if e.strip()] if len(parts) > 2 else []
                 if name:
                     contacts.append({"name": name, "phones": phones, "emails": emails})
 
